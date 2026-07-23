@@ -139,6 +139,17 @@ export const OAUTH_TEST_CONFIG = {
     // connectivity is proven by every chat/completions request.
     checkExpiry: true,
   },
+  "devin-desktop": {
+    // Replaces the retired public `windsurf` id, which sat on the #8408
+    // grandfathered backlog. Taking it off that list rather than renaming the
+    // entry is the fix the list asks for. There is no lightweight probe to hit:
+    // the upstream is the Devin/Codeium chat API, which has no userinfo
+    // endpoint, so validate on token presence/expiry like devin-cli. Unlike
+    // devin-cli this one IS refreshable — a device-code (Firebase) token
+    // rotates through refreshDevinToken; a long-lived import key is a no-op.
+    checkExpiry: true,
+    refreshable: true,
+  },
   "grok-cli": {
     // #7610: was entirely absent from OAUTH_TEST_CONFIG, so "Test Connection"
     // always fell through to the generic "Provider test not supported" branch

@@ -69,6 +69,57 @@ export const RENAMED_MIGRATION_COMPATIBILITY = [
     toVersion: "059",
     toName: "manifest_routing",
   },
+  {
+    fromVersion: "123",
+    fromName: "windsurf_to_devin_desktop",
+    toVersion: "134",
+    toName: "windsurf_to_devin_desktop",
+  },
+  {
+    fromVersion: "124",
+    fromName: "windsurf_to_devin_desktop",
+    toVersion: "134",
+    toName: "windsurf_to_devin_desktop",
+  },
+  {
+    fromVersion: "125",
+    fromName: "windsurf_to_devin_desktop",
+    toVersion: "134",
+    toName: "windsurf_to_devin_desktop",
+  },
+  {
+    fromVersion: "126",
+    fromName: "windsurf_to_devin_desktop",
+    toVersion: "134",
+    toName: "windsurf_to_devin_desktop",
+  },
+  {
+    fromVersion: "127",
+    fromName: "windsurf_to_devin_desktop",
+    toVersion: "134",
+    toName: "windsurf_to_devin_desktop",
+  },
+  {
+    fromVersion: "128",
+    fromName: "windsurf_to_devin_desktop",
+    toVersion: "134",
+    toName: "windsurf_to_devin_desktop",
+  },
+  {
+    fromVersion: "131",
+    fromName: "windsurf_to_devin_desktop",
+    toVersion: "134",
+    toName: "windsurf_to_devin_desktop",
+  },
+  {
+    // 133 collided with 133_call_logs_session_tag once that landed on release/v3.8.49
+    // ahead of this branch; installs that ran this migration from the PR at 133 are
+    // reconciled to 134 here, same as every earlier slot this file has occupied.
+    fromVersion: "133",
+    fromName: "windsurf_to_devin_desktop",
+    toVersion: "134",
+    toName: "windsurf_to_devin_desktop",
+  },
 ] as const;
 
 export const LEGACY_VERSION_SLOT_MIGRATIONS = [

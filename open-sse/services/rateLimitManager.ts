@@ -90,6 +90,7 @@ const PERSIST_DEBOUNCE_MS = 60_000; // Debounce persistence to every 60s max
 let initialized = false;
 
 let currentRequestQueueSettings: RequestQueueSettings = DEFAULT_RESILIENCE_SETTINGS.requestQueue;
+export const ZAI_WEB_REQUEST_QUEUE_MAX_WAIT_MS = 60_000;
 
 // Watchdog: detect Bottleneck limiters that are wedged (queue has work, but no
 // jobs are dispatched). When the reservoir/refresh state desyncs from reality,
@@ -140,6 +141,15 @@ function resolveMinTime(override: number | undefined | null): number {
 // Resolve a maxConcurrent override. 0 or missing means "effectively infinite".
 function resolveMaxConcurrent(override: number | undefined | null): number {
   return typeof override === "number" && override > 0 ? override : EFFECTIVELY_INFINITE_CONCURRENCY;
+}
+
+export function resolveRequestQueueMaxWaitMs(
+  provider: string,
+  configuredMaxWaitMs: number = currentRequestQueueSettings.maxWaitMs
+): number {
+  return provider.trim().toLowerCase() === "zai-web"
+    ? Math.max(configuredMaxWaitMs, ZAI_WEB_REQUEST_QUEUE_MAX_WAIT_MS)
+    : configuredMaxWaitMs;
 }
 
 function buildLimiterDefaults() {
@@ -590,15 +600,10 @@ export async function withRateLimit(
 
   // Proactive sliding-window fallback for header-less providers with a declared cap
   // (Fase 8.2). No-op unless PROVIDER_DEFAULT_RATE_LIMITS has an entry for `provider`.
-  await awaitProviderDefaultSlot(
-    provider,
-    connectionId,
-    signal,
-    currentRequestQueueSettings.maxWaitMs
-  );
+  const maxWaitMs = resolveRequestQueueMaxWaitMs(provider);
+  await awaitProviderDefaultSlot(provider, connectionId, signal, maxWaitMs);
 
   const limiter = getLimiter(provider, connectionId, model);
-  const maxWaitMs = currentRequestQueueSettings.maxWaitMs;
   const scheduleOpts = maxWaitMs && maxWaitMs > 0 ? { expiration: maxWaitMs } : {};
 
   // Issue #6593: opt-in admission cap — fast-reject before Bottleneck's

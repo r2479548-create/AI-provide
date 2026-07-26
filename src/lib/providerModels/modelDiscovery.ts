@@ -6,6 +6,8 @@ import {
 } from "@/lib/db/models";
 import { CANONICAL_EFFORT_VALUES } from "@/shared/reasoning/effortStandardization";
 import { isObsoleteKiroModelAlias } from "@omniroute/open-sse/services/kiroModels.ts";
+import { filterChatSelectableModels } from "@omniroute/open-sse/services/modelEndpointPolicy.ts";
+import { filterSelectableModels } from "@omniroute/open-sse/services/modelLifecycle.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -112,7 +114,8 @@ function parseEffortList(rawList: unknown): string[] | undefined {
         .map((entry) => {
           const entryParsed = effortEntrySchema.safeParse(entry);
           if (!entryParsed.success) return null;
-          const raw = typeof entryParsed.data === "string" ? entryParsed.data : entryParsed.data.effort;
+          const raw =
+            typeof entryParsed.data === "string" ? entryParsed.data : entryParsed.data.effort;
           return raw.length > 0 ? normalizeSupportedEffort(raw) : null;
         })
         .filter((effort): effort is string => effort !== null)
@@ -282,7 +285,10 @@ export async function persistDiscoveredModels(
   connectionId: string,
   models: unknown
 ): Promise<SyncedAvailableModel[]> {
-  const normalized = normalizeDiscoveredModels(models);
+  const normalized = filterChatSelectableModels(
+    providerId,
+    filterSelectableModels(providerId, normalizeDiscoveredModels(models))
+  );
   await replaceSyncedAvailableModelsForConnection(providerId, connectionId, normalized);
   return normalized;
 }

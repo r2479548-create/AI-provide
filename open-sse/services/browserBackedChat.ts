@@ -90,7 +90,7 @@ export function __resetHttpBackedChatOverrideForTesting(): void {
 
 // Helper to make Playwright waitForTimeout abortable via AbortSignal
 function waitWithSignal(ms: number, signal?: AbortSignal | null): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     if (signal?.aborted) return reject(new DOMException("Aborted", "AbortError"));
     const onAbort = () => {
       clearTimeout(timer);
@@ -101,9 +101,26 @@ function waitWithSignal(ms: number, signal?: AbortSignal | null): Promise<void> 
       resolve();
     }, ms);
     signal?.addEventListener("abort", onAbort, { once: true });
-  }).catch((err) => {
-    if (err instanceof DOMException && err.name === "AbortError") throw err;
   });
+}
+
+async function runAbortable<T>(
+  operation: () => Promise<T>,
+  signal?: AbortSignal | null
+): Promise<T> {
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+  const promise = operation();
+  if (!signal) return promise;
+  let abortListener: (() => void) | undefined;
+  const aborted = new Promise<never>((_, reject) => {
+    abortListener = () => reject(new DOMException("Aborted", "AbortError"));
+    signal.addEventListener("abort", abortListener, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    if (abortListener) signal.removeEventListener("abort", abortListener);
+  }
 }
 
 export interface BrowserBackedChatRequest {
@@ -284,16 +301,15 @@ export async function browserBackedChat(
   const page = await openPage(pooled);
   try {
     const tNavStart = Date.now();
-    await page.goto(chatPageUrl, {
-      waitUntil: "domcontentloaded",
-      timeout: 60000,
-      signal: signal ?? undefined,
-    });
+    await runAbortable(
+      () => page.goto(chatPageUrl, { waitUntil: "domcontentloaded", timeout: 60000 }),
+      signal
+    );
     await waitWithSignal(2500, signal);
     const navigateMs = Date.now() - tNavStart;
 
     const inputLocator = page.locator(inputSelector).first();
-    await inputLocator.waitFor({ state: "visible", timeout: 10000, signal: signal ?? undefined });
+    await runAbortable(() => inputLocator.waitFor({ state: "visible", timeout: 10000 }), signal);
     await inputLocator.fill(userMessage);
     await waitWithSignal(800, signal);
 
@@ -611,11 +627,10 @@ async function doCookieRefreshOnContext(
 ): Promise<string | null> {
   const page = await openPage(pooled);
   try {
-    await page.goto(chatPageUrl, {
-      waitUntil: "domcontentloaded",
-      timeout: 60000,
-      signal: signal ?? undefined,
-    });
+    await runAbortable(
+      () => page.goto(chatPageUrl, { waitUntil: "domcontentloaded", timeout: 60000 }),
+      signal
+    );
     return await waitForCookiesWithPolling(pooled.context, cookieDomain, signal);
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw err;

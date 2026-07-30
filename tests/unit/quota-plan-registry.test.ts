@@ -80,6 +80,7 @@ test("knownProviders() includes the full registry set", () => {
     "kimi",
     "kimi-coding",
     "xiaomi-mimo",
+    "xiaomi-mimo-token-plan",
     "alibaba",
     "grok-cli",
   ]) {

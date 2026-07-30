@@ -127,7 +127,7 @@ export default function EditConnectionModal({
     codexReasoningEffort: "medium",
     codexServiceTier: "default" as CodexServiceTier,
     codexOpenaiStoreEnabled: false,
-    codexPreserveEncryptedReasoning: false,
+    preserveEncryptedReasoning: false,
     consoleApiKey: "",
     newApiUserId: "",
     ...EMPTY_GLM_TEAM_QUOTA_FIELDS,
@@ -192,6 +192,13 @@ export default function EditConnectionModal({
   const openRouterPreset = useOpenRouterPresetControl(provider, t);
   const setOpenRouterPreset = openRouterPreset.setValue;
   const isCodex = provider === "codex";
+  const isResponsesConnection =
+    isCodex ||
+    provider === "openai" ||
+    (isOpenAICompatibleProvider(provider) &&
+      (provider.startsWith("openai-compatible-responses-") ||
+        connectionProviderSpecificData?.apiType === "responses" ||
+        formData.targetFormat === "openai-responses"));
   const isClaude = provider === "claude";
   const isAntigravityFamily = provider === "antigravity" || provider === "agy";
   const localProviderMetadata = getLocalProviderMetadata(provider);
@@ -313,7 +320,7 @@ export default function EditConnectionModal({
         codexReasoningEffort: codexRequestDefaults.reasoningEffort,
         codexServiceTier: codexRequestDefaults.serviceTier ?? "default",
         codexOpenaiStoreEnabled: connection.providerSpecificData?.openaiStoreEnabled === true,
-        codexPreserveEncryptedReasoning:
+        preserveEncryptedReasoning:
           connection.providerSpecificData?.preserveEncryptedReasoning === true,
         consoleApiKey: existingConsoleApiKey,
         newApiUserId: existingNewApiUserId,
@@ -583,8 +590,6 @@ export default function EditConnectionModal({
           };
           updates.providerSpecificData.openaiStoreEnabled =
             formData.codexOpenaiStoreEnabled === true;
-          updates.providerSpecificData.preserveEncryptedReasoning =
-            formData.codexPreserveEncryptedReasoning === true;
         }
         if (isAntigravityFamily) {
           updates.providerSpecificData.projectId = trimmedCloudCodeProjectId || null;
@@ -607,6 +612,10 @@ export default function EditConnectionModal({
         if (showProtocolSelector) {
           updates.providerSpecificData.targetFormat = formData.targetFormat || null;
         }
+      }
+      if (isResponsesConnection && updates.providerSpecificData) {
+        updates.providerSpecificData.preserveEncryptedReasoning =
+          formData.preserveEncryptedReasoning === true;
       }
       const freeOnlyChanged =
         showFreeModelsToggle &&
@@ -700,22 +709,6 @@ export default function EditConnectionModal({
               onChange={(checked) => setFormData({ ...formData, codexOpenaiStoreEnabled: checked })}
               label={t("openaiResponsesStoreLabel")}
               description={t("openaiResponsesStoreDescription")}
-            />
-            <Toggle
-              checked={formData.codexPreserveEncryptedReasoning}
-              onChange={(checked) =>
-                setFormData({ ...formData, codexPreserveEncryptedReasoning: checked })
-              }
-              label={providerText(
-                t,
-                "preserveEncryptedReasoningLabel",
-                "Preserve encrypted reasoning"
-              )}
-              description={providerText(
-                t,
-                "preserveEncryptedReasoningDescription",
-                "Forward encrypted Responses reasoning items supplied by the client."
-              )}
             />
           </div>
         )}
@@ -1085,6 +1078,25 @@ export default function EditConnectionModal({
               t,
               "apiProtocolHint",
               "Some providers publish the same models over more than one protocol. Leave the default unless you need the alternative."
+            )}
+          />
+        )}
+
+        {isResponsesConnection && (
+          <Toggle
+            checked={formData.preserveEncryptedReasoning}
+            onChange={(checked) =>
+              setFormData({ ...formData, preserveEncryptedReasoning: checked })
+            }
+            label={providerText(
+              t,
+              "preserveEncryptedReasoningLabel",
+              "Preserve encrypted reasoning"
+            )}
+            description={providerText(
+              t,
+              "preserveEncryptedReasoningDescription",
+              "Forward encrypted Responses reasoning items supplied by the client."
             )}
           />
         )}

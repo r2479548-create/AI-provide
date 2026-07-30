@@ -127,6 +127,7 @@ export default function EditConnectionModal({
     codexReasoningEffort: "medium",
     codexServiceTier: "default" as CodexServiceTier,
     codexOpenaiStoreEnabled: false,
+    codexPreserveEncryptedReasoning: false,
     consoleApiKey: "",
     newApiUserId: "",
     ...EMPTY_GLM_TEAM_QUOTA_FIELDS,
@@ -312,6 +313,8 @@ export default function EditConnectionModal({
         codexReasoningEffort: codexRequestDefaults.reasoningEffort,
         codexServiceTier: codexRequestDefaults.serviceTier ?? "default",
         codexOpenaiStoreEnabled: connection.providerSpecificData?.openaiStoreEnabled === true,
+        codexPreserveEncryptedReasoning:
+          connection.providerSpecificData?.preserveEncryptedReasoning === true,
         consoleApiKey: existingConsoleApiKey,
         newApiUserId: existingNewApiUserId,
         glmOrganizationId: existingGlmOrganizationId,
@@ -580,6 +583,8 @@ export default function EditConnectionModal({
           };
           updates.providerSpecificData.openaiStoreEnabled =
             formData.codexOpenaiStoreEnabled === true;
+          updates.providerSpecificData.preserveEncryptedReasoning =
+            formData.codexPreserveEncryptedReasoning === true;
         }
         if (isAntigravityFamily) {
           updates.providerSpecificData.projectId = trimmedCloudCodeProjectId || null;
@@ -695,6 +700,22 @@ export default function EditConnectionModal({
               onChange={(checked) => setFormData({ ...formData, codexOpenaiStoreEnabled: checked })}
               label={t("openaiResponsesStoreLabel")}
               description={t("openaiResponsesStoreDescription")}
+            />
+            <Toggle
+              checked={formData.codexPreserveEncryptedReasoning}
+              onChange={(checked) =>
+                setFormData({ ...formData, codexPreserveEncryptedReasoning: checked })
+              }
+              label={providerText(
+                t,
+                "preserveEncryptedReasoningLabel",
+                "Preserve encrypted reasoning"
+              )}
+              description={providerText(
+                t,
+                "preserveEncryptedReasoningDescription",
+                "Forward encrypted Responses reasoning items supplied by the client."
+              )}
             />
           </div>
         )}

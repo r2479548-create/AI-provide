@@ -649,6 +649,19 @@ export default function EditConnectionModal({
       ? ERROR_TYPE_LABELS[testResult.diagnosis.type] || null
       : null;
 
+  const preserveEncryptedReasoningToggle = isResponsesConnection ? (
+    <Toggle
+      checked={formData.preserveEncryptedReasoning}
+      onChange={(checked) => setFormData({ ...formData, preserveEncryptedReasoning: checked })}
+      label={providerText(t, "preserveEncryptedReasoningLabel", "Preserve encrypted reasoning")}
+      description={providerText(
+        t,
+        "preserveEncryptedReasoningDescription",
+        "Forward encrypted Responses reasoning items supplied by the client."
+      )}
+    />
+  ) : null;
+
   return (
     <Modal isOpen={isOpen} title={t("editConnection")} onClose={onClose}>
       <div className="flex flex-col gap-4">
@@ -742,6 +755,7 @@ export default function EditConnectionModal({
               description={t("importFreeModelsOnlyHint")}
             />
           )}
+          {preserveEncryptedReasoningToggle}
           <Toggle
             checked={formData.disableCooling}
             onChange={(checked) => setFormData({ ...formData, disableCooling: checked })}
@@ -1078,25 +1092,6 @@ export default function EditConnectionModal({
               t,
               "apiProtocolHint",
               "Some providers publish the same models over more than one protocol. Leave the default unless you need the alternative."
-            )}
-          />
-        )}
-
-        {isResponsesConnection && (
-          <Toggle
-            checked={formData.preserveEncryptedReasoning}
-            onChange={(checked) =>
-              setFormData({ ...formData, preserveEncryptedReasoning: checked })
-            }
-            label={providerText(
-              t,
-              "preserveEncryptedReasoningLabel",
-              "Preserve encrypted reasoning"
-            )}
-            description={providerText(
-              t,
-              "preserveEncryptedReasoningDescription",
-              "Forward encrypted Responses reasoning items supplied by the client."
             )}
           />
         )}

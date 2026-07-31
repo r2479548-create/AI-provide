@@ -84,6 +84,16 @@ const minimalBuildAliases = isMinimalBuild
     }
   : {};
 
+// CI probe (advisory-build OOM investigation): the "Build (advisory)" job in
+// quality.yml has been reliably OOM'ing/hanging on GitHub-hosted ubuntu-latest
+// runners inside Turbopack's compile pass ("Creating an optimized production
+// build"), across nearly every open PR regardless of diff size — see
+// docs/reference/ENVIRONMENT.md's OMNIROUTE_USE_TURBOPACK entry and #6409.
+// These two flags are opt-in and set ONLY by that CI job (never by the
+// release/Docker/Electron/npm-publish build paths) so this is a pure
+// evidence-gathering change, not a claim that either flag fixes the OOM.
+const isAdvisoryBuildProbe = process.env.OMNIROUTE_BUILD_ADVISORY_PROBE === "1";
+
 function readTimeoutMs(...values) {
   for (const value of values) {
     const normalized = typeof value === "string" ? value.trim() : value;
@@ -205,6 +215,24 @@ const nextConfig = {
       "material-symbols",
       "next-intl",
     ],
+    ...(isAdvisoryBuildProbe
+      ? {
+          // "Experimental for production builds" per Next's own docs — persists
+          // Turbopack's compile cache under distDir between builds. On a fresh CI
+          // checkout there's nothing to restore yet, so this flag alone changes
+          // nothing on a PR's first build; it only pays off once something (a
+          // later push, or a wired actions/cache step) gives it a prior cache to
+          // read. Included so a maintainer can layer that on without touching
+          // next.config.mjs again.
+          turbopackFileSystemCacheForBuild: true,
+          // This job never uploads its build output (see quality.yml comment),
+          // so it doesn't need production-fidelity minification — only a
+          // "does this compile" signal. Skipping it removes one memory-heavy
+          // pass (holding the full bundle + AST at once) from the compile step
+          // that's actually OOM'ing.
+          turbopackMinify: false,
+        }
+      : {}),
   },
   outputFileTracingRoot: projectRoot,
   outputFileTracingIncludes: {

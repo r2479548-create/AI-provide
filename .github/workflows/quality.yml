@@ -79,6 +79,12 @@ jobs:
       - run: npm run build
         env:
           OMNIROUTE_USE_TURBOPACK: "1"
+          # Evidence-gathering probe for the OOM/cancellation this job has been
+          # hitting on ubuntu-latest during Turbopack's compile pass (nearly
+          # every open PR, not diff-size-dependent — see next.config.mjs's
+          # isAdvisoryBuildProbe comment). Scoped to this job only; the
+          # release/Docker/Electron/npm-publish build paths are unaffected.
+          OMNIROUTE_BUILD_ADVISORY_PROBE: "1"
       # No artifact upload here: the PR-to-release quality workflow has no
       # downstream package/e2e jobs that consume the Next.js build output.
 

@@ -1460,26 +1460,30 @@ export async function isModelAllowedForKey(
     }
   }
 
-  // Empty array means all models allowed
-  if (!allowedModels || allowedModels.length === 0) {
-    return true;
-  }
-
-  let allowed = false;
+  let allowed = !allowedModels || allowedModels.length === 0;
 
   // Check if model matches each allowed pattern
   // Support exact match and prefix match (e.g., "openai/*" allows all OpenAI models)
-  for (const pattern of allowedModels) {
-    if (modelPatternMatches(pattern, modelPermissionCandidates)) {
-      allowed = true;
-      break;
+  if (allowedModels && allowedModels.length > 0) {
+    for (const pattern of allowedModels) {
+      if (modelPatternMatches(pattern, modelPermissionCandidates)) {
+        allowed = true;
+        break;
+      }
     }
   }
 
+  // Extract model target and optional provider prefix if present (e.g. "openai/gpt-4" -> modelTarget: "gpt-4", provider: "openai")
+  const hasProviderPrefix = modelId?.includes("/");
+  const provider = hasProviderPrefix ? modelId.split("/")[0] : undefined;
+  const modelTarget = hasProviderPrefix ? modelId.split("/").slice(1).join("/") : modelId || "";
+
   // If key belongs to groups, also check group-level permissions
   if (metadata.id) {
-    const groupAccess = checkKeyModelAccess(metadata.id, modelId || "");
-    if (!groupAccess.allowed) {
+    // Check both modelTarget and full modelId against group rules
+    const groupAccessTarget = checkKeyModelAccess(metadata.id, modelTarget, provider);
+    const groupAccessFull = checkKeyModelAccess(metadata.id, modelId || "", provider);
+    if (!groupAccessTarget.allowed || !groupAccessFull.allowed) {
       allowed = false;
     }
   }

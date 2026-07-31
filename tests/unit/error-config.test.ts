@@ -20,6 +20,11 @@ test("errorConfig exposes centralized client-facing status metadata", () => {
     code: "payment_required",
   });
   assert.equal(DEFAULT_ERROR_MESSAGES[406], "Model not supported");
+  assert.deepEqual(ERROR_TYPES[499], {
+    type: "client_error",
+    code: "client_closed_request",
+  });
+  assert.equal(DEFAULT_ERROR_MESSAGES[499], "Client closed request");
   assert.equal(getDefaultErrorMessage(999), "An error occurred");
   assert.deepEqual(getErrorInfo(504), {
     type: "server_error",

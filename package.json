@@ -23,6 +23,7 @@
     ".env.example",
     "scripts/build/postinstall.mjs",
     "scripts/build/fixTlsClientNodeBinary.mjs",
+    "scripts/build/fixPlaywrightAndroid.mjs",
     "bin/cli/runtime/",
     "scripts/postinstall.mjs",
     "scripts/build/postinstallSupport.mjs",

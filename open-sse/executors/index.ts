@@ -15,6 +15,7 @@ import { OpencodeExecutor } from "./opencode.ts";
 import { PuterExecutor } from "./puter.ts";
 import { VertexExecutor } from "./vertex.ts";
 import { CliproxyapiExecutor } from "./cliproxyapi.ts";
+import { DarioExecutor } from "./dario.ts";
 import { NineRouterExecutor } from "./ninerouter.ts";
 import { PerplexityWebExecutor } from "./perplexity-web.ts";
 import { GrokWebExecutor } from "./grok-web.ts";
@@ -104,6 +105,8 @@ const executors = {
   "vertex-partner": new VertexExecutor(),
   cliproxyapi: new CliproxyapiExecutor(),
   cpa: new CliproxyapiExecutor(), // Alias
+  dario: new DarioExecutor(),
+  dr: new DarioExecutor(), // Alias
   "9router": new NineRouterExecutor(),
   nr: new NineRouterExecutor(), // Alias
   "perplexity-web": new PerplexityWebExecutor(),
@@ -242,6 +245,7 @@ export { CloudflareAIExecutor } from "./cloudflare-ai.ts";
 export { OpencodeExecutor } from "./opencode.ts";
 export { PuterExecutor } from "./puter.ts";
 export { CliproxyapiExecutor } from "./cliproxyapi.ts";
+export { DarioExecutor } from "./dario.ts";
 export { NineRouterExecutor } from "./ninerouter.ts";
 export { VertexExecutor } from "./vertex.ts";
 export { PerplexityWebExecutor } from "./perplexity-web.ts";

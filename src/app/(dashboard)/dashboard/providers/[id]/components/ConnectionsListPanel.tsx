@@ -51,6 +51,12 @@ type ConnectionsListPanelProps = {
   handleToggleQuotaVisibility: (id: string, visible: boolean) => void;
   handleToggleClaudeExtraUsage: (id: string, enabled: boolean) => void;
   handleToggleCliproxyapiMode: (id: string, enabled: boolean) => void;
+  handleSetUpstreamProxyMode: (
+    mode: "native" | "cliproxyapi" | "dario" | "fallback",
+    fallbackBackend?: "cliproxyapi" | "dario"
+  ) => void;
+  upstreamProxyMode: "native" | "cliproxyapi" | "dario" | "fallback";
+  upstreamProxyFallbackBackend: "cliproxyapi" | "dario";
   handleToggleCodexLimit: (id: string, type: "use5h" | "useWeekly", enabled: boolean) => void;
   handleToggleProxyEnabled: (id: string, enabled: boolean) => void;
   handleTogglePerKeyProxyEnabled: (id: string, enabled: boolean) => void;
@@ -129,6 +135,9 @@ export default function ConnectionsListPanel({
   handleToggleQuotaVisibility,
   handleToggleClaudeExtraUsage,
   handleToggleCliproxyapiMode,
+  handleSetUpstreamProxyMode,
+  upstreamProxyMode,
+  upstreamProxyFallbackBackend,
   handleToggleCodexLimit,
   handleToggleProxyEnabled,
   handleTogglePerKeyProxyEnabled,
@@ -395,6 +404,9 @@ export default function ConnectionsListPanel({
                 isCcCompatible={isCcCompatible}
                 cliproxyapiEnabled={cpaProviderEnabled}
                 onToggleCliproxyapiMode={(enabled) => handleToggleCliproxyapiMode(conn.id, enabled)}
+                upstreamProxyMode={upstreamProxyMode}
+                upstreamProxyFallbackBackend={upstreamProxyFallbackBackend}
+                onSetUpstreamProxyMode={handleSetUpstreamProxyMode}
                 onToggleCodex5h={(enabled) => handleToggleCodexLimit(conn.id, "use5h", enabled)}
                 onToggleCodexWeekly={(enabled) =>
                   handleToggleCodexLimit(conn.id, "useWeekly", enabled)
@@ -590,6 +602,9 @@ export default function ConnectionsListPanel({
                     onToggleCliproxyapiMode={(enabled) =>
                       handleToggleCliproxyapiMode(conn.id, enabled)
                     }
+                    upstreamProxyMode={upstreamProxyMode}
+                    upstreamProxyFallbackBackend={upstreamProxyFallbackBackend}
+                    onSetUpstreamProxyMode={handleSetUpstreamProxyMode}
                     onToggleCodex5h={(enabled) => handleToggleCodexLimit(conn.id, "use5h", enabled)}
                     onToggleCodexWeekly={(enabled) =>
                       handleToggleCodexLimit(conn.id, "useWeekly", enabled)

@@ -1625,7 +1625,11 @@ export function checkFallbackError(
       !errorStr.toLowerCase().includes("hour quota") &&
       !errorStr.toLowerCase().includes("quota has been exceeded")
     ) {
-      return resolveApiKeyForbiddenFallback(errorStr, buildRetryableFallback, RateLimitReason.AUTH_ERROR);
+      return resolveApiKeyForbiddenFallback(
+        errorStr,
+        buildRetryableFallback,
+        RateLimitReason.AUTH_ERROR
+      );
     }
   }
 
@@ -1946,6 +1950,8 @@ export function applyErrorState<T extends AccountState | null | undefined>(
 
   return nextState;
 }
+
+export { isAccountSemaphoreFull } from "./accountSemaphore.ts";
 
 /**
  * Get account health score (0-100) for P2C selection (Phase 9)

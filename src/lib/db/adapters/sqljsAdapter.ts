@@ -1,4 +1,10 @@
-// src/lib/db/adapters/sqljsAdapter.ts
+/**
+ * @file sqljsAdapter.ts
+ * @description sql.js WASM SQLite adapter — fallback when native drivers are unavailable.
+ *
+ * @changes
+ * - [2026-07-23] [Composer] - Drop package.json resolve to silence Turbopack build warning (#8135)
+ */
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -27,6 +33,10 @@ function resolveSqlJsWasmPath(): string {
   // Global Bun installs do not use the application's cwd as the package root.
   // Resolve the actual JavaScript entrypoint so sql.js can find its sibling WASM
   // asset when OmniRoute is launched from ~/.bun/install/global.
+  // sql.js main entry resolves to dist/sql-wasm.js; the WASM asset lives alongside it.
+  // Do not resolve sql.js/package.json — Turbopack still statically analyzes that
+  // subpath and spams "Can't resolve 'sql.js/package.json'" even with computed strings
+  // (#8135). serverExternalPackages covers the top-level module only.
   try {
     const sqlJsEntry = _require.resolve("sql.js");
     candidatePaths.push(path.join(path.dirname(sqlJsEntry), "sql-wasm.wasm"));

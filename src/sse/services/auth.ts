@@ -2464,13 +2464,20 @@ export function extractApiKey(request: AuthRequestLike, opts?: { allowUrl?: bool
   }
 
   // Issue #2225: Anthropic Messages API clients authenticate via x-api-key.
-  // Gate the fallback on the anthropic-version header so we don't trip up
-  // local-mode requests from non-Anthropic clients that send placeholder
+  // Gate the fallback on anthropic-version OR user-agent matching claude-code / anthropic
+  // so we don't trip up local-mode requests from non-Anthropic clients that send placeholder
   // x-api-key values (which would otherwise be rejected as Invalid API key).
-  const anthropicVersion =
-    readHeaderValue(request?.headers, "anthropic-version") ||
-    readHeaderValue(request?.headers, "Anthropic-Version");
-  if (anthropicVersion) {
+  const userAgent =
+    readHeaderValue(request?.headers, "user-agent") ||
+    readHeaderValue(request?.headers, "User-Agent") ||
+    "";
+  const isClaudeClient =
+    Boolean(
+      readHeaderValue(request?.headers, "anthropic-version") ||
+      readHeaderValue(request?.headers, "Anthropic-Version")
+    ) || /claude-code|claude-cli|anthropic/i.test(userAgent);
+
+  if (isClaudeClient) {
     const xApiKey =
       readHeaderValue(request?.headers, "x-api-key") ||
       readHeaderValue(request?.headers, "X-Api-Key");

@@ -9,6 +9,7 @@
  */
 
 import Bottleneck from "bottleneck";
+import { toNumber } from "@/shared/utils/numeric";
 import { parseRetryAfterFromBody } from "./accountFallback.ts";
 import { getAntigravityQuotaFamily } from "./antigravityQuotaFamily.ts";
 import { getProviderCategory } from "../config/providerRegistry.ts";
@@ -50,16 +51,6 @@ function toRecord(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : {};
 }
 
-function toNumber(value: unknown, fallback = 0): number {
-  const parsed =
-    typeof value === "number"
-      ? value
-      : typeof value === "string" && value.trim().length > 0
-        ? Number(value)
-        : Number.NaN;
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 function isNodeTestRunnerChild(): boolean {
   return typeof process.env.NODE_TEST_CONTEXT === "string";
 }
@@ -99,6 +90,7 @@ const PERSIST_DEBOUNCE_MS = 60_000; // Debounce persistence to every 60s max
 let initialized = false;
 
 let currentRequestQueueSettings: RequestQueueSettings = DEFAULT_RESILIENCE_SETTINGS.requestQueue;
+export const ZAI_WEB_REQUEST_QUEUE_MAX_WAIT_MS = 60_000;
 
 // Watchdog: detect Bottleneck limiters that are wedged (queue has work, but no
 // jobs are dispatched). When the reservoir/refresh state desyncs from reality,
@@ -149,6 +141,15 @@ function resolveMinTime(override: number | undefined | null): number {
 // Resolve a maxConcurrent override. 0 or missing means "effectively infinite".
 function resolveMaxConcurrent(override: number | undefined | null): number {
   return typeof override === "number" && override > 0 ? override : EFFECTIVELY_INFINITE_CONCURRENCY;
+}
+
+export function resolveRequestQueueMaxWaitMs(
+  provider: string,
+  configuredMaxWaitMs: number = currentRequestQueueSettings.maxWaitMs
+): number {
+  return provider.trim().toLowerCase() === "zai-web"
+    ? Math.max(configuredMaxWaitMs, ZAI_WEB_REQUEST_QUEUE_MAX_WAIT_MS)
+    : configuredMaxWaitMs;
 }
 
 function buildLimiterDefaults() {
@@ -599,15 +600,10 @@ export async function withRateLimit(
 
   // Proactive sliding-window fallback for header-less providers with a declared cap
   // (Fase 8.2). No-op unless PROVIDER_DEFAULT_RATE_LIMITS has an entry for `provider`.
-  await awaitProviderDefaultSlot(
-    provider,
-    connectionId,
-    signal,
-    currentRequestQueueSettings.maxWaitMs
-  );
+  const maxWaitMs = resolveRequestQueueMaxWaitMs(provider);
+  await awaitProviderDefaultSlot(provider, connectionId, signal, maxWaitMs);
 
   const limiter = getLimiter(provider, connectionId, model);
-  const maxWaitMs = currentRequestQueueSettings.maxWaitMs;
   const scheduleOpts = maxWaitMs && maxWaitMs > 0 ? { expiration: maxWaitMs } : {};
 
   // Issue #6593: opt-in admission cap — fast-reject before Bottleneck's
@@ -663,18 +659,16 @@ export async function withRateLimit(
       return await limiter.schedule(scheduleOpts, fn);
     }
   } catch (err) {
-    // Bottleneck's raw `This job timed out after <maxWaitMs> ms.` is
-    // indistinguishable from an upstream gateway timeout, so it leaks into 502
-    // bodies / call-log `last_error` and gets misdiagnosed as a provider outage
-    // (#4165). Rewrite it into a clear, OmniRoute-owned error (knob named,
-    // upstream disclaimed, original kept as `cause`, `code` for classification).
-    // If the limiter is idle with capacity after the expiry, the scheduler is wedged.
-    // Reset it and retry this never-dispatched function once on a fresh limiter.
+    // Bottleneck's `expiration` covers the complete scheduled job: time waiting
+    // in its queue plus execution after dispatch. Rewrite the raw timeout so it
+    // does not falsely claim either an upstream timeout or queue saturation
+    // (#4165). If the limiter is idle with capacity after the expiry, the
+    // scheduler is wedged; reset it and retry the never-dispatched function once.
     if (err?.message?.includes("This job timed out")) {
       const key = getLimiterKey(provider, connectionId, model);
       const queueState = await getQueueHealthSnapshot(key, limiter);
       logRateLimit(
-        `⏰ [RATE-LIMIT] ${key} — job expired after ${Math.ceil((maxWaitMs || 0) / 1000)}s in queue, dropping`
+        `⏰ [RATE-LIMIT] ${key} — scheduled job exceeded ${Math.ceil((maxWaitMs || 0) / 1000)}s local budget, dropping`
       );
       const limiterIsWedged =
         retryAfterWedge &&
@@ -690,10 +684,10 @@ export async function withRateLimit(
         return withRateLimit(provider, connectionId, model, fn, signal, false);
       }
       const queueErr = new Error(
-        `Request dropped after exceeding the local rate-limit queue budget maxWaitMs (${maxWaitMs}ms) for ` +
-          `${model ? `${provider}/${model}` : provider} — this is OmniRoute's request queue ` +
-          `(resilienceSettings.requestQueue.maxWaitMs), not an upstream timeout. Raise it in ` +
-          `Settings → Resilience if this is queue saturation rather than a slow provider.`,
+        `Request exceeded OmniRoute's local rate-limit scheduling budget maxWaitMs (${maxWaitMs}ms) for ` +
+          `${model ? `${provider}/${model}` : provider}. This budget covers both queue wait and execution ` +
+          `after dispatch; it is not an upstream timeout. Configure it with ` +
+          `resilienceSettings.requestQueue.maxWaitMs.`,
         { cause: err }
       ) as Error & { code?: string };
       queueErr.code = "RATE_LIMIT_QUEUE_TIMEOUT";

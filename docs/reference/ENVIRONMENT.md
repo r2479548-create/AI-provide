@@ -760,9 +760,13 @@ Embedding layer, vector store and reranking knobs for the persistent memory subs
 | `MEMORY_TRANSFORMERS_MODEL`     | `Xenova/all-MiniLM-L6-v2`  | HF repo id for the opt-in `@huggingface/transformers` local MiniLM pipeline (~23 MB int8, ~400 MB RAM).    |
 | `MEMORY_STATIC_MODEL`           | `minishlab/potion-base-8M` | HF repo id for the static potion/Model2Vec lookup-table embedder. Downloaded lazily into the cache dir.    |
 | `MEMORY_STATIC_CACHE_DIR`       | `<DATA_DIR>/embeddings`    | Directory used to cache the static potion model files. Defaults under `DATA_DIR` when unset.               |
+| `HF_HUB_ENDPOINT`               | `https://huggingface.co`   | Override Hugging Face Hub base URL used by `staticPotion.ts` (e.g. mirror endpoint for air-gapped setups). |
 | `MEMORY_VEC_TOP_K`              | `20`                       | Default top-K used by the `sqlite-vec` brute-force vector search inside `src/lib/memory/vectorStore.ts`.   |
 | `MEMORY_RRF_K`                  | `60`                       | Reciprocal Rank Fusion constant `k` for hybrid FTS5 + vector retrieval (sqlite-vec recipe).                |
-| `HF_HUB_ENDPOINT`               | `https://huggingface.co`   | Override Hugging Face Hub base URL used by `staticPotion.ts` (e.g. mirror endpoint for air-gapped setups). |
+| `NOTION_API_KEY`                | _(unset)_                  | API key for Notion backend (used by `genericBackend.ts` known backend preset).                                |
+| `NOTION_API_URL`                | `https://api.notion.com/v1`| Base URL for Notion API (can override for self-hosted Notion alternatives).                                   |
+| `OBSIDIAN_API_KEY`              | _(unset)_                  | API key for Obsidian Vault backend (used by `genericBackend.ts` known backend preset).                        |
+| `OBSIDIAN_API_URL`              | `http://localhost:27123`   | Base URL for Obsidian Vault API (can override for remote vault).                                              |
 | `MEMORY_TYPED_DECAY_ENABLED`    | `false`                    | TV6 typed memory decay master switch. **Opt-in (default off)** — the sweep **deletes** decayed memories. With it off, `access_count`/`last_accessed_at` are pure telemetry and nothing is ever deleted. |
 | `MEMORY_TYPED_DECAY_EPISODIC_DAYS` | `30`                    | TTL (days) after which an unused `episodic` memory decays. `0` makes episodic immune too. Durable types (`factual`/`procedural`/`semantic`) are always immune. The decay clock re-bases on `last_accessed_at`. |
 | `MEMORY_TYPED_DECAY_ACCESS_IMMUNITY` | `3`                   | A memory injected `>=` this many times becomes immune to decay regardless of type. `0` disables access immunity. |

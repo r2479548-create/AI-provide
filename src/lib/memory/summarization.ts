@@ -78,6 +78,8 @@ interface MemoryRow {
   created_at: string;
   updated_at: string;
   expires_at: string | null;
+  access_count?: number | null;
+  last_accessed_at?: string | null;
 }
 
 function rowToMemory(row: MemoryRow): Memory {
@@ -101,6 +103,8 @@ function rowToMemory(row: MemoryRow): Memory {
     createdAt: new Date(String(row.created_at)),
     updatedAt: new Date(String(row.updated_at)),
     expiresAt: row.expires_at ? new Date(String(row.expires_at)) : null,
+    accessCount: typeof row.access_count === "number" ? row.access_count : 0,
+    lastAccessedAt: row.last_accessed_at ? new Date(String(row.last_accessed_at)) : null,
   };
 }
 

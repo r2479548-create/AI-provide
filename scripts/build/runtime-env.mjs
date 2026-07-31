@@ -107,6 +107,7 @@ export function withRuntimePortEnv(env, runtimePorts) {
     PORT: String(dashboardPort),
     DASHBOARD_PORT: String(dashboardPort),
     API_PORT: String(apiPort),
+    HOSTNAME: env.OMNIROUTE_HOSTNAME || "0.0.0.0",
   };
 }
 

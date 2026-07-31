@@ -38,7 +38,7 @@ import {
   getCircuitBreakerStatus,
   refreshWithRetry,
 } from "./tokenRefresh/circuitBreaker.ts";
-import { refreshWindsurfToken } from "./tokenRefresh/providers/windsurf.ts";
+import { refreshDevinToken } from "./tokenRefresh/providers/devin.ts";
 import { refreshCodebuddyCnToken } from "./tokenRefresh/providers/codebuddyCn.ts";
 import { refreshClineToken } from "./tokenRefresh/providers/cline.ts";
 import { refreshKimiCodingToken } from "./tokenRefresh/providers/kimiCoding.ts";
@@ -54,7 +54,7 @@ import { refreshGitHubToken } from "./tokenRefresh/providers/github.ts";
 import { refreshCopilotToken } from "./tokenRefresh/providers/copilot.ts";
 
 export {
-  refreshWindsurfToken,
+  refreshDevinToken,
   refreshCodebuddyCnToken,
   refreshClineToken,
   refreshKimiCodingToken,
@@ -411,9 +411,9 @@ async function _getAccessTokenInternal(provider, credentials, log, proxyConfig: 
         proxyConfig
       );
 
-    case "windsurf":
+    case "devin-desktop":
     case "devin-cli":
-      return await refreshWindsurfToken(
+      return await refreshDevinToken(
         credentials.refreshToken,
         credentials.providerSpecificData,
         log,
@@ -445,7 +445,7 @@ export function supportsTokenRefresh(provider) {
     "amazon-q",
     "cline",
     "kimi-coding",
-    "windsurf",
+    "devin-desktop",
     // #8407: do NOT list "devin-cli" here. It is import-token / local-CLI owned
     // (`devin auth login`); connections never carry a refresh token. Leaving it
     // in this set made tokenHealthCheck treat it as refresh-capable and force

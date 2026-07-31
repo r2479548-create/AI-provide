@@ -37,13 +37,15 @@ test.after(async () => {
 test("supportsTokenRefresh excludes devin-cli (#8407)", () => {
   // Root fix: drop "devin-cli" from the explicit set so the health sweep's
   // supportsTokenRefresh=false guard applies (same idea as not listing a
-  // non-refresh local-CLI provider). windsurf stays refresh-capable.
+  // non-refresh local-CLI provider). Its refresh-capable sibling — devin-desktop,
+  // which replaced the retired public `windsurf` id — must stay refresh-capable,
+  // so the exclusion is provider-specific and not a blanket Devin opt-out.
   assert.equal(
     supportsTokenRefresh("devin-cli"),
     false,
     "devin-cli is local import-token / CLI-owned — not refresh-capable"
   );
-  assert.equal(supportsTokenRefresh("windsurf"), true);
+  assert.equal(supportsTokenRefresh("devin-desktop"), true);
 });
 
 test("checkConnection leaves a devin-cli connection with no refresh token untouched (#8407)", async () => {
@@ -63,5 +65,9 @@ test("checkConnection leaves a devin-cli connection with no refresh token untouc
 
   const updated = await providersDb.getProviderConnectionById(getCreatedConnectionId(connection));
   assert.equal(updated?.testStatus, "active", "devin-cli testStatus must remain active");
-  assert.notEqual(updated?.errorCode, "no_refresh_token", "devin-cli must not be marked no_refresh_token");
+  assert.notEqual(
+    updated?.errorCode,
+    "no_refresh_token",
+    "devin-cli must not be marked no_refresh_token"
+  );
 });

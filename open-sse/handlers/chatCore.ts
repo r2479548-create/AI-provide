@@ -132,6 +132,7 @@ import {
   supportsMaxTokens,
   getResolvedModelCapabilities,
   getExplicitModelOutputCap,
+  resolveInputTokenCapForGate,
 } from "@/lib/modelCapabilities.ts";
 import { toPositiveInteger } from "../services/reasoningTokenBuffer.ts";
 import { normalizeThinkingForModel } from "@/shared/constants/modelSpecs.ts";
@@ -1871,11 +1872,6 @@ export async function handleChatCore({
     }
   }
 
-  // Key the lookup by { provider, model } — the bare-string form resolves to
-  // `provider: null`, which skips both the registry cap and the operator's
-  // `max_token` capability override (#6524), the documented escape hatch for a
-  // wrong synced `limit_output`. Clamping against a stale spec while the operator
-  // raised the ceiling would silently truncate output.
   const modelOutputCap = toPositiveInteger(
     getExplicitModelOutputCap({ provider, model: effectiveModel })
   );
@@ -1884,13 +1880,15 @@ export async function handleChatCore({
     finalEstimatedInputTokens,
     finalContextLimit,
     targetFormat === FORMATS.CLAUDE && sourceFormat !== FORMATS.CLAUDE ? DEFAULT_MAX_TOKENS : 0,
-    modelOutputCap
+    modelOutputCap,
+    toPositiveInteger(resolveInputTokenCapForGate({ provider, model: effectiveModel }, { isCombo }))
   );
   if (!outputBudget.ok) {
+    const exceededInputCap = outputBudget.maxInputTokens !== undefined;
     const message =
-      `Input exceeds the context window for ${provider}/${effectiveModel}: ` +
-      `estimated ${outputBudget.estimatedInputTokens} input tokens, limit ${outputBudget.contextLimit}. ` +
-      "Reduce the prompt or route to a model with a larger context window.";
+      `Input exceeds ${exceededInputCap ? "maximum input tokens" : "context window"} for ${provider}/${effectiveModel}: ` +
+      `estimated ${outputBudget.estimatedInputTokens} input tokens, ${exceededInputCap ? `max input ${outputBudget.maxInputTokens}` : `limit ${outputBudget.contextLimit}`}. ` +
+      `Reduce the prompt or route to a model with a larger ${exceededInputCap ? "input limit" : "context window"}.`;
     log?.warn?.("CONTEXT", message);
     trackPendingRequest(model, provider, connectionId, false);
     return createErrorResult(

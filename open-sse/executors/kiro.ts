@@ -6,6 +6,7 @@ import {
   type ProviderCredentials,
 } from "./base.ts";
 import { PROVIDERS } from "../config/constants.ts";
+import { getRegistryEntry } from "../config/providerRegistry.ts";
 import { v4 as uuidv4 } from "uuid";
 import { refreshKiroToken } from "../services/tokenRefresh.ts";
 import {
@@ -130,7 +131,45 @@ function buildKiroFinishChunk(
   return finishChunk;
 }
 
-function ensureKiroUsage(state: KiroStreamState) {
+/**
+ * Kiro's fallback input-token budget when the model is absent from the registry.
+ * Mirrors the registry's own `defaultContextLength` and kiro-gateway's
+ * DEFAULT_MAX_INPUT_TOKENS.
+ */
+const KIRO_DEFAULT_MAX_INPUT_TOKENS = 200000;
+
+/**
+ * Input-token budget for a Kiro model, used to turn `contextUsagePercentage`
+ * into an absolute token count.
+ *
+ * Kiro reports only a percentage, so the budget it is a percentage OF decides the
+ * result. A fixed 200000 undercounts every model with a larger window by the
+ * ratio of the two windows — claude-sonnet-5 (1M) by 5x, gpt-5.6-* (272k) by
+ * ~26% — and those numbers land in usage_history and the API-key token-limit
+ * counters.
+ */
+function resolveKiroMaxInputTokens(model: string): number {
+  const entry = getRegistryEntry("kiro");
+  const modelEntry = entry?.models?.find((m) => m.id === model);
+  return modelEntry?.contextLength || entry?.defaultContextLength || KIRO_DEFAULT_MAX_INPUT_TOKENS;
+}
+
+/**
+ * Synthesize a usage block when Kiro sent no token counts of its own.
+ *
+ * Live `generateAssistantResponse` traffic carries no token counts at all — only
+ * `contextUsageEvent.contextUsagePercentage` and a `meteringEvent` credit figure
+ * (verified against the live API: frames are assistantResponseEvent /
+ * metadataEvent / contextUsageEvent / meteringEvent). So these numbers are
+ * ESTIMATES, derived the same way kiro-gateway derives them: the percentage
+ * yields the total, the response text yields the completion, and the prompt is
+ * the remainder.
+ *
+ * Subtracting matters: the percentage already covers the whole context, so
+ * adding a separately-estimated completion on top would double-count it and
+ * inflate `total_tokens`.
+ */
+function ensureKiroUsage(state: KiroStreamState, model: string) {
   if (state.usage) return;
 
   const estimatedOutputTokens =
@@ -138,17 +177,30 @@ function ensureKiroUsage(state: KiroStreamState) {
       ? Math.max(1, Math.floor(state.totalContentLength / 4))
       : 0;
 
-  const estimatedInputTokens =
+  const estimatedTotalTokens =
     state.contextUsagePercentage && state.contextUsagePercentage > 0
-      ? Math.floor((state.contextUsagePercentage * 200000) / 100)
+      ? Math.floor((state.contextUsagePercentage * resolveKiroMaxInputTokens(model)) / 100)
       : 0;
 
-  if (estimatedInputTokens <= 0 && estimatedOutputTokens <= 0) return;
+  if (estimatedTotalTokens <= 0 && estimatedOutputTokens <= 0) return;
+
+  // Without a percentage there is no total to split, so the output estimate is
+  // all that is known and stands on its own.
+  if (estimatedTotalTokens <= 0) {
+    state.usage = {
+      prompt_tokens: 0,
+      completion_tokens: estimatedOutputTokens,
+      total_tokens: estimatedOutputTokens,
+    };
+    return;
+  }
+
+  const promptTokens = Math.max(0, estimatedTotalTokens - estimatedOutputTokens);
 
   state.usage = {
-    prompt_tokens: estimatedInputTokens,
+    prompt_tokens: promptTokens,
     completion_tokens: estimatedOutputTokens,
-    total_tokens: estimatedInputTokens + estimatedOutputTokens,
+    total_tokens: promptTokens + estimatedOutputTokens,
   };
 }
 
@@ -685,37 +737,74 @@ export class KiroExecutor extends BaseExecutor {
               state.hasMeteringEvent = true;
             }
 
-            // Handle metricsEvent for token usage
-            if (eventType === "metricsEvent") {
-              // Extract usage data from metricsEvent payload
-              const metrics = event.payload?.metricsEvent || event.payload;
+            // Handle token usage. Kiro reports it under more than one frame: the
+            // `metricsEvent` shape covered by unit tests, and a `metadataEvent`
+            // carrying a nested `usage` object — the shape observed on live
+            // API-key traffic (see tests/unit/executor-kiro.test.ts, the
+            // "live API-key event shape" case, whose frames are
+            // assistantResponseEvent / metadataEvent / contextUsageEvent /
+            // meteringEvent with no metricsEvent at all). Reading only
+            // `metricsEvent` meant cache tokens were never picked up in
+            // production even after their field names were corrected, because
+            // the branch holding that code never ran.
+            if (eventType === "metricsEvent" || eventType === "metadataEvent") {
+              const metrics =
+                event.payload?.metricsEvent ||
+                event.payload?.usage ||
+                (event.payload?.metadataEvent as JsonRecord)?.usage ||
+                event.payload;
               if (metrics && typeof metrics === "object") {
+                const readNumber = (...candidates: unknown[]) =>
+                  candidates.find((value) => typeof value === "number") as number | undefined;
+
+                // Bedrock-style (`inputTokens`) and OpenAI-style
+                // (`prompt_tokens`) spellings both appear across Kiro frames.
                 const inputTokens =
-                  typeof (metrics as JsonRecord).inputTokens === "number"
-                    ? ((metrics as JsonRecord).inputTokens as number)
-                    : 0;
+                  readNumber(
+                    (metrics as JsonRecord).inputTokens,
+                    (metrics as JsonRecord).prompt_tokens
+                  ) || 0;
                 const outputTokens =
-                  typeof (metrics as JsonRecord).outputTokens === "number"
-                    ? ((metrics as JsonRecord).outputTokens as number)
-                    : 0;
+                  readNumber(
+                    (metrics as JsonRecord).outputTokens,
+                    (metrics as JsonRecord).completion_tokens
+                  ) || 0;
 
-                const cacheReadTokens =
-                  typeof (metrics as JsonRecord).cacheReadTokens === "number"
-                    ? ((metrics as JsonRecord).cacheReadTokens as number)
-                    : 0;
+                const cacheReadTokens = readNumber(
+                  (metrics as JsonRecord).cacheReadInputTokens,
+                  (metrics as JsonRecord).cacheReadTokens,
+                  (metrics as JsonRecord).cache_read_input_tokens
+                );
 
-                const cacheCreationTokens =
-                  typeof (metrics as JsonRecord).cacheCreationTokens === "number"
-                    ? ((metrics as JsonRecord).cacheCreationTokens as number)
-                    : 0;
+                const cacheCreationTokens = readNumber(
+                  (metrics as JsonRecord).cacheWriteInputTokens,
+                  (metrics as JsonRecord).cacheCreationTokens,
+                  (metrics as JsonRecord).cache_creation_input_tokens
+                );
 
                 if (inputTokens > 0 || outputTokens > 0) {
                   state.usage = {
                     prompt_tokens: inputTokens,
                     completion_tokens: outputTokens,
                     total_tokens: inputTokens + outputTokens,
-                    ...(cacheReadTokens > 0 && { cache_read_input_tokens: cacheReadTokens }),
-                    ...(cacheCreationTokens > 0 && {
+                    ...((cacheReadTokens || 0) > 0 && {
+                      cache_read_input_tokens: cacheReadTokens,
+                    }),
+                    ...((cacheCreationTokens || 0) > 0 && {
+                      cache_creation_input_tokens: cacheCreationTokens,
+                    }),
+                  };
+                } else if ((cacheReadTokens || 0) > 0 || (cacheCreationTokens || 0) > 0) {
+                  // Cache counts can arrive on a frame that carries no
+                  // input/output totals. Preserve them instead of dropping the
+                  // whole frame, and let ensureKiroUsage() fill the totals from
+                  // contextUsagePercentage.
+                  state.usage = {
+                    ...(state.usage || {}),
+                    ...((cacheReadTokens || 0) > 0 && {
+                      cache_read_input_tokens: cacheReadTokens,
+                    }),
+                    ...((cacheCreationTokens || 0) > 0 && {
                       cache_creation_input_tokens: cacheCreationTokens,
                     }),
                   };
@@ -772,7 +861,7 @@ export class KiroExecutor extends BaseExecutor {
           // Emit finish chunk if not already sent
           if (!state.finishEmitted) {
             state.finishEmitted = true;
-            ensureKiroUsage(state);
+            ensureKiroUsage(state, model);
             const finishChunk = buildKiroFinishChunk(state, responseId, created, model, true);
             controller.enqueue(TEXT_ENCODER.encode(`data: ${JSON.stringify(finishChunk)}\n\n`));
           }

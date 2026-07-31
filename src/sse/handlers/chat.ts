@@ -44,7 +44,7 @@ import { checkAndRefreshToken } from "../services/tokenRefresh";
 import { createHookContext, runHooks, initPreRequestRegistry } from "@/lib/middleware/registry";
 import { rejectPeerRequest } from "@/shared/resilience/peerRouting";
 import { deleteHandoff, getHandoff } from "@/lib/db/contextHandoffs";
-import { updateCombo } from "@/lib/db/combos";
+import { getComboByName, updateCombo } from "@/lib/db/combos";
 import { isModelAllowedForKey } from "@/lib/db/apiKeys";
 import { promoteSuccessfulComboModel } from "@/lib/combos/autoPromote";
 import {
@@ -453,10 +453,14 @@ export async function handleChat(
   // image-registry match is only image-only when the same provider/model pair is
   // absent from the chat catalog.
   const imageModel = getImageModelEntry(modelStr);
+  // Exact stored combo names take precedence over colliding bare image aliases.
+  // Keep this narrower than getComboForModel() so mappings and synthetic aliases
+  // retain their existing resolution order.
+  const isExactStoredCombo = imageModel ? Boolean(await getComboByName(modelStr)) : false;
   const isChatCatalogModel = imageModel
     ? getModelsByProviderId(imageModel.provider).some((model) => model.id === imageModel.model)
     : false;
-  if (imageModel && !isChatCatalogModel) {
+  if (imageModel && !isExactStoredCombo && !isChatCatalogModel) {
     log.warn("CHAT", `Rejecting image-generation model on chat endpoint: ${modelStr}`);
     return errorResponse(
       HTTP_STATUS.BAD_REQUEST,

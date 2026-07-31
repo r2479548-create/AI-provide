@@ -160,6 +160,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // ── Receive (event listeners) ────────────────────────────
   // Fix #6: Returns a disposer function for precise cleanup
+  // "server-status" payloads include remoteUrl when running in Remote Server
+  // Mode (see electron/main.js setRemoteServerUrl) — surfaced here read-only;
+  // the actual URL is configured via the tray menu, not the renderer.
   onServerStatus: (callback) => safeOn("server-status", callback),
   onPortChanged: (callback) => safeOn("port-changed", callback),
   onUpdateStatus: (callback) => safeOn("update-status", callback),

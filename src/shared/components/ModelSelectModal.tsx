@@ -180,7 +180,7 @@ export default function ModelSelectModal({
       const connection = activeProviders.find((p) => p.provider === providerId);
       if (!connection?.id) return null;
 
-      const res = await fetch(`/api/providers/${connection.id}/models`);
+      const res = await fetch(`/api/providers/${connection.id}/models?chatOnly=true`);
       if (!res.ok) {
         console.warn(`Failed to fetch models for ${providerId}: ${res.status}`);
         return null;

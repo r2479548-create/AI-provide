@@ -256,13 +256,17 @@ export function translateRequest(
     // Check for direct translation path first (e.g., Claude → Gemini)
     const directTranslator = getRequestTranslator(sourceFormat, targetFormat);
     if (directTranslator && sourceFormat !== FORMATS.OPENAI && targetFormat !== FORMATS.OPENAI) {
-      // Thread the routed provider id so target translators can apply provider-specific
-      // quirks (e.g. Vertex rejects function_call.id — #3440).
+      // Thread the routed provider id AND the per-connection signature namespace so
+      // direct target translators can apply the same quirks as the hub path — notably
+      // Claude→Gemini needs _signatureNamespace to replay Gemini 3+ thought_signature
+      // on multi-turn tool calls (#2504, direct-path port).
+      const directHasNs = options?.signatureNamespace != null;
       const directCredentials =
-        provider != null
+        provider != null || directHasNs
           ? {
               ...(credentials && typeof credentials === "object" ? credentials : {}),
-              _provider: provider,
+              ...(provider != null ? { _provider: provider } : {}),
+              ...(directHasNs ? { _signatureNamespace: options.signatureNamespace } : {}),
             }
           : credentials;
       result = directTranslator(model, result, stream, directCredentials);

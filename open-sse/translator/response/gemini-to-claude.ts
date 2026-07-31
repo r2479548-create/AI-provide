@@ -2,6 +2,10 @@ import { register } from "../registry.ts";
 import { FORMATS } from "../formats.ts";
 import { isAbortFinishReason } from "../../utils/finishReason.ts";
 import { REVERSE_MAP } from "../../services/claudeCodeToolRemapper.ts";
+import {
+  buildGeminiThoughtSignatureKey,
+  storeGeminiThoughtSignature,
+} from "../../services/geminiThoughtSignatureStore.ts";
 
 function normalizeToolName(name: string): string {
   return REVERSE_MAP[name] ?? name;
@@ -56,6 +60,15 @@ export function geminiToClaudeResponse(chunk, state) {
       const hasThoughtSig = part.thoughtSignature || part.thought_signature;
       const isThought = part.thought === true;
 
+      // Capture thought_signature from any part (thought, standalone signature, or
+      // functionCall) so it can be stored against the next functionCall's tool id.
+      // Mirrors the gemini→openai direct path — the signature frequently lands on a
+      // preceding thought part rather than the functionCall part itself.
+      const partSig = part.thoughtSignature || part.thought_signature;
+      if (typeof partSig === "string" && partSig) {
+        state.pendingThoughtSignature = partSig;
+      }
+
       // Thinking content → thinking block (always open+close per chunk)
       if (isThought && part.text) {
         // Close any open text block first
@@ -87,9 +100,26 @@ export function geminiToClaudeResponse(chunk, state) {
         }
         const fc = part.functionCall;
         const rawToolName = fc.name;
-        const restoredToolName = normalizeToolName(state.toolNameMap?.get(rawToolName) || rawToolName);
+        const restoredToolName = normalizeToolName(
+          state.toolNameMap?.get(rawToolName) || rawToolName
+        );
         const idx = state.contentBlockIndex++;
         const toolId = fc.id || `toolu_${Date.now()}_${idx}`;
+
+        // Persist the thought_signature keyed by this tool id (scoped to the
+        // connection) so the next Claude→Gemini request can replay it on the
+        // functionCall part. Without it Gemini 3+ 400s multi-turn tool calls.
+        const sig =
+          (typeof part.thoughtSignature === "string" && part.thoughtSignature) ||
+          (typeof part.thought_signature === "string" && part.thought_signature) ||
+          state.pendingThoughtSignature;
+        if (sig) {
+          storeGeminiThoughtSignature(
+            buildGeminiThoughtSignatureKey(state.signatureNamespace, toolId),
+            sig
+          );
+          state.pendingThoughtSignature = null;
+        }
 
         results.push({
           type: "content_block_start",

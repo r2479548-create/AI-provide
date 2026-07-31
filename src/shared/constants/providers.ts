@@ -178,6 +178,7 @@ export function isSelfHostedChatProvider(providerId: unknown): boolean {
 // cyclomatic complexity flat as this list grows — see g4f.space (#6650).
 const EXPLICIT_OPTIONAL_APIKEY_PROVIDER_IDS = new Set([
   "searxng-search",
+  "firecrawl",
   "pollinations",
   "copilot-web",
   "hackclub",

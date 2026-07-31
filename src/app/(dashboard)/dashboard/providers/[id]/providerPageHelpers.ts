@@ -223,6 +223,7 @@ export const CONFIGURABLE_BASE_URL_PROVIDERS = new Set([
   "databricks",
   "snowflake",
   "searxng-search",
+  "firecrawl",
   "petals",
   "comfyui",
   // #7447 — Moonshot/Kimi's international host (api.moonshot.ai) rejects
@@ -244,6 +245,7 @@ export const DEFAULT_PROVIDER_BASE_URLS: Record<string, string> = {
   "xiaomi-mimo": "https://token-plan-sgp.xiaomimimo.com/v1",
   siliconflow: "https://api.siliconflow.com/v1",
   "searxng-search": "http://localhost:8888/search",
+  firecrawl: "https://api.firecrawl.dev",
   petals: "https://chat.petals.dev/api/v1/generate",
   comfyui: "http://localhost:8188",
   // #7447 — default stays the international host so existing/new
@@ -328,6 +330,8 @@ export function getProviderBaseUrlHint(
       return t ? t("snowflakeBaseUrlHint") : undefined;
     case "searxng-search":
       return t ? t("searxngBaseUrlHint") : undefined;
+    case "firecrawl":
+      return t ? t("firecrawlBaseUrlHint") : undefined;
     default:
       return undefined;
   }
@@ -343,6 +347,7 @@ export function getProviderBaseUrlPlaceholder(providerId?: string | null) {
     case "bailian-coding-plan":
     case "xiaomi-mimo":
     case "comfyui":
+    case "firecrawl":
       return getProviderBaseUrlDefault(providerId);
     case "siliconflow":
       return "https://api.siliconflow.cn/v1";

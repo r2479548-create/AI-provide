@@ -330,7 +330,10 @@ function trimLeadingDashes(value: string): string {
  * sees a consistent identifier.
  */
 export function resolveOmniRoutePluginOptions(opts?: OmniRoutePluginOptions): Required<
-  Pick<OmniRoutePluginOptions, "providerId" | "displayName" | "modelCacheTtl" | "autoSyncIntervalMs">
+  Pick<
+    OmniRoutePluginOptions,
+    "providerId" | "displayName" | "modelCacheTtl" | "autoSyncIntervalMs"
+  >
 > & {
   /**
    * #6859: the UNPREFIXED provider id ("omniroute", "omniroute-preprod", …).
@@ -621,7 +624,7 @@ export function createOmniRouteAuthHook(opts?: OmniRoutePluginOptions): AuthHook
  */
 export function invalidateOmniRouteFetchCache(
   cache: OmniRouteFetchCache,
-  baseURL?: string,
+  baseURL?: string
 ): number {
   if (!baseURL) {
     const n = cache.size;
@@ -645,7 +648,7 @@ export function invalidateOmniRouteFetchCache(
  */
 export async function resolveOmniRouteRuntimeAuth(
   resolved: ResolvedOmniRoutePluginOptions,
-  readAuthJson?: OmniRouteReadAuthJson,
+  readAuthJson?: OmniRouteReadAuthJson
 ): Promise<{ apiKey: string; baseURL: string; managementReadToken: string } | null> {
   const reader = readAuthJson ?? defaultReadAuthJson;
   let authJson: AuthJsonShape | undefined | null;
@@ -672,7 +675,7 @@ export async function resolveOmniRouteRuntimeAuth(
       e &&
       (e as { type?: unknown }).type === "api" &&
       typeof (e as { key?: unknown }).key === "string" &&
-      ((e as { key: string }).key).length > 0
+      (e as { key: string }).key.length > 0
     ) {
       entry = e as AuthJsonApiEntry;
       break;
@@ -737,7 +740,7 @@ export async function forceSyncOmniRouteModels(args: {
 
   const auth = await resolveOmniRouteRuntimeAuth(
     resolved,
-    args.readAuthJson ?? defaultReadAuthJson,
+    args.readAuthJson ?? defaultReadAuthJson
   );
   if (!auth) {
     return {
@@ -795,7 +798,7 @@ export async function forceSyncOmniRouteModels(args: {
         rawCompressionCombos = await compressionMetaFetcher(
           auth.baseURL,
           auth.managementReadToken,
-          10_000,
+          10_000
         );
       } catch {
         rawCompressionCombos = [];
@@ -820,10 +823,7 @@ export async function forceSyncOmniRouteModels(args: {
       rawConnections,
       expiresAt: t + resolved.modelCacheTtl,
     };
-    const cacheKey = modelsCacheKey(
-      auth.baseURL,
-      `${auth.apiKey}\0${auth.managementReadToken}`,
-    );
+    const cacheKey = modelsCacheKey(auth.baseURL, `${auth.apiKey}\0${auth.managementReadToken}`);
     cache.set(cacheKey, entry);
 
     if (wantDiskCache) {
@@ -831,7 +831,7 @@ export async function forceSyncOmniRouteModels(args: {
         const fingerprint = diskSnapshotIdentityFingerprint(
           auth.baseURL,
           auth.apiKey,
-          auth.managementReadToken,
+          auth.managementReadToken
         );
         const { expiresAt: _expiresAt, ...diskEntry } = entry;
         await defaultDiskSnapshotWriter(resolved.providerId, diskEntry, fingerprint);
@@ -843,7 +843,7 @@ export async function forceSyncOmniRouteModels(args: {
     console.warn(
       `[omniroute-plugin] force sync ok providerId=${resolved.providerId} ` +
         `models=${rawModels.length} combos=${rawCombos.length} ` +
-        `clearedMemory=${clearedMemory + clearedAll} disk=${clearedDisk}`,
+        `clearedMemory=${clearedMemory + clearedAll} disk=${clearedDisk}`
     );
 
     return {
@@ -944,7 +944,7 @@ export function startOmniRouteAutoSync(args: {
       const result = await forceSyncOmniRouteModels({ resolved, cache });
       if (!result.ok) {
         console.warn(
-          `[omniroute-plugin] auto-sync failed providerId=${resolved.providerId}: ${result.error}`,
+          `[omniroute-plugin] auto-sync failed providerId=${resolved.providerId}: ${result.error}`
         );
         return;
       }
@@ -955,7 +955,7 @@ export function startOmniRouteAutoSync(args: {
       if (result.count !== lastCount) {
         console.warn(
           `[omniroute-plugin] auto-sync catalog size changed ${lastCount} → ${result.count} ` +
-            `(providerId=${resolved.providerId})`,
+            `(providerId=${resolved.providerId})`
         );
         lastCount = result.count;
       }
@@ -976,7 +976,7 @@ export function startOmniRouteAutoSync(args: {
   }
 
   console.warn(
-    `[omniroute-plugin] auto-sync enabled intervalMs=${intervalMs} providerId=${resolved.providerId}`,
+    `[omniroute-plugin] auto-sync enabled intervalMs=${intervalMs} providerId=${resolved.providerId}`
   );
 
   return () => {
@@ -1032,7 +1032,13 @@ export const OmniRoutePlugin: Plugin = async (_input, options) => {
     const cfg = input as Config & {
       command?: Record<
         string,
-        { template: string; description?: string; agent?: string; model?: string; subtask?: boolean }
+        {
+          template: string;
+          description?: string;
+          agent?: string;
+          model?: string;
+          subtask?: boolean;
+        }
       >;
     };
     if (!cfg.command) cfg.command = {};
@@ -1794,7 +1800,7 @@ export interface OmniRouteEnrichmentEntry {
   providerCanonical?: string;
   /**
    * Human-readable upstream provider label (e.g. `Claude`, `Kiro`,
-   * `Windsurf`, `GitHub Models`). Populated from the per-provider
+   * `Windsurf`, `Baidu Qianfan`). Populated from the per-provider
    * `entry.name` field inside `/api/pricing/models`. Used by the
    * `providerTag` feature to suffix `ModelV2.name` with the routing
    * destination so the OC TUI picker can differentiate the same
@@ -1880,7 +1886,7 @@ export const defaultOmniRouteEnrichmentFetcher: OmniRouteEnrichmentFetcher = asy
               ? canonicalRaw
               : providerAlias;
           // Upstream provider human label (e.g. `Claude`, `Kiro`,
-          // `GitHub Models`). Optional — falls back to undefined when
+          // `Baidu Qianfan`). Optional — falls back to undefined when
           // OmniRoute hasn't curated a label for this slot.
           const slotNameRaw = (slot as { name?: unknown }).name;
           const providerDisplayName =
@@ -2171,7 +2177,7 @@ export function shortProviderLabel(
  *   → `Claude - Claude Opus 4.7`
  *   → `Kiro - Claude Opus 4.7`
  *   → `AssemblyAI - Universal 2 (Transcription)` (slot.name fits, used verbatim)
- *   → `GHM - GPT 5`           (slot.name "GitHub Models" > 12 chars → UPPER(alias))
+ *   → `Qianfan - ERNIE 5.1` (slot.name "Baidu Qianfan" > 12 chars → titleCase(alias))
  *
  * Mutates the model in place and is idempotent — running twice never
  * double-prefixes. No-op when:
@@ -2195,7 +2201,7 @@ export function applyProviderTag(
   const prefix = `${label}${PROVIDER_TAG_SEPARATOR}`;
   if (model.name.startsWith(prefix)) return model;
   // When enrichment already prepended [Free], move it before the provider
-  // tag: "[Free] GPT-4.1" → "[Free] GHM - GPT-4.1" not "GHM - [Free] GPT-4.1"
+  // tag: "[Free] ERNIE 5.1" → "[Free] Qianfan - ERNIE 5.1" not "Qianfan - [Free] ERNIE 5.1"
   if (model.name.startsWith("[Free] ")) {
     model.name = `[Free] ${prefix}${model.name.slice(7)}`;
   } else {

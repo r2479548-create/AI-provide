@@ -1,16 +1,16 @@
 ---
 title: "Provider Reference"
 version: 3.8.50
-lastUpdated: 2026-07-30
+lastUpdated: 2026-07-31
 ---
 
 # Provider Reference
 
 > **Auto-generated** from `src/shared/constants/providers.ts` — do not edit by hand.
 > Regenerate with: `npm run gen:provider-reference`
-> **Last generated:** 2026-07-30
+> **Last generated:** 2026-07-31
 
-Total providers: **290**. See category breakdown below.
+Total providers: **289**. See category breakdown below.
 
 ## Categories
 
@@ -97,7 +97,7 @@ Use the dashboard at `/dashboard/providers` to enable, configure, and test each 
 | `zai-web` | `zw` | Z.ai Web (Free) | Web cookie | [link](https://chat.z.ai) | Paste the full Cookie header from chat.z.ai (must include the token=<JWT> cookie) | — |
 | `zenmux-free` | `zmf` | ZenMux Free (Web) | Web cookie | [link](https://zenmux.ai) | Login at zenmux.ai, then export all cookies using EditThisCookie or Cookie-Editor and paste the full Cookie header string here. Refresh every ~30 days. | — |
 
-## API Key Providers (paid / paid-with-free-credits) (195)
+## API Key Providers (paid / paid-with-free-credits) (194)
 
 | ID | Alias | Name | Tags | Website | Notes |
 |----|-------|------|------|---------|-------|
@@ -170,7 +170,6 @@ Use the dashboard at `/dashboard/providers` to enable, configure, and test each 
 | `gemini` | `gemini` | Gemini (Google AI Studio) | API key | [link](https://aistudio.google.com) | Free forever: 1,500 req/day for Gemini 2.5 Flash — no credit card, get key at aistudio.google.com |
 | `getgoapi` | `ggo` | GoAPI | API key, aggregator | [link](https://api.getgoapi.com) | — |
 | `gigachat` | `gigachat` | GigaChat (Sber) | API key | [link](https://developers.sber.ru) | — |
-| `github-models` | `ghm` | GitHub Models | API key | [link](https://github.com/marketplace/models) | Create a GitHub PAT with 'models: read' scope at github.com/settings/tokens |
 | `gitlab` | `gitlab` | GitLab Duo PAT | API key | [link](https://docs.gitlab.com/user/duo_agent_platform/code_suggestions/) | GitLab personal access token for the public Code Suggestions API. Configure a self-hosted base URL when not using gitlab.com. |
 | `gitlawb` | `glb` | Gitlawb Opengateway (MiMo) | API key | [link](https://opengateway.gitlawb.com) | Free MiMo (xiaomi/mimo-v2.5) revoked 2026-05 — Opengateway is now a pay-as-you-go credit gateway; no recurring free model. |
 | `gitlawb-gmi` | `glb-gmi` | Gitlawb Opengateway (GMI Cloud) | API key | [link](https://opengateway.gitlawb.com) | Free Nemotron promo ended 2026-06 — the GMI Cloud route is now pay-as-you-go credit only. |

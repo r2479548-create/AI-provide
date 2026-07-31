@@ -1967,7 +1967,7 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function pollAdobeJob(opts: {
+export async function pollAdobeJob(opts: {
   pollUrl: string;
   accessToken: string;
   kind: "image" | "video";

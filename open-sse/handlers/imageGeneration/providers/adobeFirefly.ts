@@ -19,6 +19,8 @@ import {
   resolveAdobeSourceImageIds,
   resolveAdobeImageModel,
 } from "../../../services/adobeFireflyClient.ts";
+import { isAdobeFireflyUpscaleModel } from "../../../services/adobeFireflyUpscale.ts";
+import { handleAdobeFireflyImageUpscale } from "../../imageUpscale/adobeFirefly.ts";
 
 function normalizePositiveNumber(value: unknown, fallback: number): number {
   const n = Number(value);
@@ -57,6 +59,19 @@ export async function handleAdobeFireflyImageGeneration({
 }) {
   const startTime = Date.now();
   const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+
+  // Topaz upscalers share adobe-firefly but use /v2/3p-images/upsample (no prompt).
+  if (isAdobeFireflyUpscaleModel(model)) {
+    return handleAdobeFireflyImageUpscale({
+      model,
+      provider,
+      body: body as Record<string, unknown>,
+      credentials,
+      log,
+      fetchImpl,
+    });
+  }
+
   if (!prompt) {
     return saveImageErrorResult({
       provider,

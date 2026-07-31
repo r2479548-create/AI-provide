@@ -24,7 +24,6 @@ import { traeProvider } from "./registry/trae/index.ts";
 import { muse_spark_webProvider } from "./registry/muse-spark-web/index.ts";
 import { lmarenaProvider } from "./registry/lmarena/index.ts";
 import { kilocodeProvider } from "./registry/kilocode/index.ts";
-import { github_modelsProvider } from "./registry/github/models/index.ts";
 import { githubProvider } from "./registry/github/index.ts";
 import { gheCopilotProvider } from "./registry/ghe-copilot/index.ts";
 import { difyProvider } from "./registry/dify/index.ts";
@@ -244,7 +243,6 @@ export const REGISTRY: Record<string, RegistryEntry> = {
   "muse-spark-web": muse_spark_webProvider,
   lmarena: lmarenaProvider,
   kilocode: kilocodeProvider,
-  "github-models": github_modelsProvider,
   github: githubProvider,
   "ghe-copilot": gheCopilotProvider,
   dify: difyProvider,

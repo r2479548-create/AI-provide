@@ -12,6 +12,10 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import {
+  classifyCodexFailoverFailure,
+  isCodexOverloadStatus,
+} from "../../open-sse/handlers/chatCore/codexFailover.ts";
 
 // ── Helpers imported directly (no SQLite dependency) ────────────────────────
 const authModule = await import("../../src/sse/services/auth.ts");
@@ -153,28 +157,81 @@ test("codex failover: Object.assign patches credentials with new account", () =>
   );
 });
 
-// ── Test 6: failover only triggers on 429, not other errors ──────────────────
-test("codex failover: only 429 triggers account rotation", () => {
+// ── Test 6: failover only triggers for 429 or explicit Codex overload ─────────
+test("codex failover: 429 rotates and preserves persisted cooldown behavior", () => {
+  assert.deepEqual(classifyCodexFailoverFailure(429, ""), {
+    reason: "rate_limit",
+    persistCooldown: true,
+  });
+});
+
+test("codex failover: explicit overload/capacity 502/503/504 rotates request-locally", () => {
+  const overloadBodies = [
+    [
+      502,
+      '{\n  "error": {\n    "code":  "server_is_overloaded",\n    "message": "Our servers are overloaded"\n  }\n}',
+    ],
+    [503, '{"error":{"type":"service_unavailable_error","message":"Please retry"}}'],
+    [503, '{"error":{"message":"Selected model is at capacity. Please retry."}}'],
+    [504, '{"response":{"error":{"message":"Our servers are currently overloaded."}}}'],
+  ] as const;
+
+  for (const [status, body] of overloadBodies) {
+    assert.deepEqual(classifyCodexFailoverFailure(status, body), {
+      reason: "overload",
+      persistCooldown: false,
+    });
+  }
+});
+
+test("codex failover: arbitrary 5xx does not rotate accounts", () => {
+  const nonOverloadFailures = [
+    [500, '{"error":{"code":"server_is_overloaded"}}'],
+    [502, '{"error":{"code":"bad_gateway","message":"Bad gateway"}}'],
+    [503, '{"error":{"code":"service_unavailable","message":"Service temporarily unavailable"}}'],
+    [503, '{"error":{"message":"Chat admission capacity is temporarily unavailable"}}'],
+    [504, '{"error":{"code":"gateway_timeout","message":"Upstream request timed out"}}'],
+  ] as const;
+
+  for (const [status, body] of nonOverloadFailures) {
+    assert.equal(classifyCodexFailoverFailure(status, body), null);
+  }
+});
+
+test("codex failover: only overload candidate statuses require body inspection", () => {
+  assert.equal(isCodexOverloadStatus(429), false);
+  assert.equal(isCodexOverloadStatus(500), false);
+  assert.equal(isCodexOverloadStatus(502), true);
+  assert.equal(isCodexOverloadStatus(503), true);
+  assert.equal(isCodexOverloadStatus(504), true);
+});
+
+test("codex failover: provider/attempt guards remain bounded to Codex and three attempts", () => {
   const shouldTriggerFailover = (
     provider: string,
     status: number,
+    body: string,
     attempt: number,
     maxAttempts: number
-  ) => provider === "codex" && status === 429 && attempt < maxAttempts - 1;
+  ) =>
+    provider === "codex" &&
+    classifyCodexFailoverFailure(status, body) !== null &&
+    attempt < maxAttempts - 1;
 
-  assert.equal(shouldTriggerFailover("codex", 429, 0, 3), true, "Codex 429 attempt 0 → rotate");
-  assert.equal(shouldTriggerFailover("codex", 429, 1, 3), true, "Codex 429 attempt 1 → rotate");
+  assert.equal(shouldTriggerFailover("codex", 429, "", 0, 3), true);
   assert.equal(
-    shouldTriggerFailover("codex", 429, 2, 3),
-    false,
-    "Codex 429 last attempt → no rotate"
+    shouldTriggerFailover("codex", 503, '{"error":{"code":"server_is_overloaded"}}', 1, 3),
+    true
   );
-  assert.equal(shouldTriggerFailover("codex", 500, 0, 3), false, "Codex 500 → no rotate");
-  assert.equal(shouldTriggerFailover("codex", 200, 0, 3), false, "Codex 200 → no rotate");
   assert.equal(
-    shouldTriggerFailover("openai", 429, 0, 1),
+    shouldTriggerFailover("codex", 429, "", 2, 3),
     false,
-    "OpenAI 429 → no rotate (not codex)"
+    "last attempt does not rotate"
+  );
+  assert.equal(
+    shouldTriggerFailover("openai", 429, "", 0, 3),
+    false,
+    "other providers do not rotate"
   );
 });
 

@@ -9,7 +9,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { CodexExecutor, __setCodexWebSocketTransportForTesting } from "../../open-sse/executors/codex.ts";
+import {
+  CodexExecutor,
+  __setCodexWebSocketTransportForTesting,
+} from "../../open-sse/executors/codex.ts";
 
 test.afterEach(() => {
   __setCodexWebSocketTransportForTesting(undefined);
@@ -88,6 +91,37 @@ test("CodexExecutor.execute converts server_is_overloaded / service_unavailable_
     });
 
     assert.equal(result.response.status, 503);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("CodexExecutor.execute converts nested response.failed server_is_overloaded into a 503 Response", async () => {
+  const executor = new CodexExecutor();
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () =>
+    new Response(
+      sseStreamFromChunks([
+        'event: response.failed\ndata: {"type":"response.failed","response":{"status":"failed","error":{"code":"server_is_overloaded","message":"Our servers are currently overloaded. Please try again later."}}}\n\n',
+      ]),
+      {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }
+    );
+
+  try {
+    const result = await executor.execute({
+      model: "gpt-5.5",
+      body: { model: "gpt-5.5", input: [{ role: "user", content: "hello" }] },
+      stream: true,
+      credentials: { accessToken: "codex-token" },
+    });
+
+    assert.equal(result.response.status, 503);
+    const body = await result.response.json();
+    assert.match(body.error.message, /currently overloaded/i);
   } finally {
     globalThis.fetch = originalFetch;
   }

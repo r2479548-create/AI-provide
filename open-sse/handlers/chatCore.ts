@@ -26,7 +26,11 @@ import {
   resolveCompressionHeader,
   isStripReasoningRequested,
 } from "./chatCore/headers.ts";
-import { markCodexScopeRateLimited } from "./chatCore/codexFailover.ts";
+import {
+  classifyCodexFailoverFailure,
+  isCodexOverloadStatus,
+  markCodexScopeRateLimited,
+} from "./chatCore/codexFailover.ts";
 import { isCodexOriginatedHeaders } from "../config/codexIdentity.ts";
 import { trackDevice, extractIpFromHeaders } from "../services/deviceTracker.ts";
 import { getCombosCached } from "./chatCore/comboContextCache.ts";
@@ -2694,7 +2698,7 @@ export async function handleChatCore({
           const isModelScopeForRequest = isModelScope();
           const maxAttempts = isModelScopeForRequest ? 3 : provider === "codex" ? 3 : 1;
 
-          // ── Codex 429 account-rotation state ─────────────────────────────────
+          // ── Codex transient account-rotation state ─────────────────────────────
           // Track excluded connection IDs for codex failover across attempts.
           const codexExcludedIds: string[] = [];
           // Derive session affinity key once for codex failover (used to clear affinity on 429).
@@ -2817,56 +2821,79 @@ export async function handleChatCore({
                 }
               }
 
-              // Codex 429 account-rotation failover (disabled for context-relay so combo.ts can inject handoff)
-              if (
+              // Codex account rotation (disabled for context-relay so combo.ts can inject
+              // handoff). Preserve the existing 429 cooldown behavior. For 502/503/504,
+              // rotate only when the response explicitly says Codex is overloaded/at
+              // capacity, and exclude that connection only within this request.
+              const shouldInspectCodexFailure =
                 provider === "codex" &&
                 comboStrategy !== "context-relay" &&
-                res.response.status === 429 &&
-                attempts < maxAttempts - 1
-              ) {
+                attempts < maxAttempts - 1 &&
+                (res.response.status === 429 || isCodexOverloadStatus(res.response.status));
+              const codexFailoverDecision = shouldInspectCodexFailure
+                ? classifyCodexFailoverFailure(
+                    res.response.status,
+                    res.response.status === 429
+                      ? ""
+                      : await res.response
+                          .clone()
+                          .text()
+                          .catch(() => "")
+                  )
+                : null;
+              if (codexFailoverDecision) {
                 const failedConnectionId =
                   execCreds?.connectionId || credentials?.connectionId || connectionId;
                 const normalizedHeaders = normalizeHeaders(res.response.headers);
                 const retryAfterHeader = normalizedHeaders["retry-after"] ?? null;
-                const retryAfterMs = retryAfterHeader
-                  ? Number.parseFloat(retryAfterHeader) * 1000
+                const retryAfterSeconds = retryAfterHeader
+                  ? Number.parseFloat(retryAfterHeader)
+                  : Number.NaN;
+                const retryAfterMs = Number.isFinite(retryAfterSeconds)
+                  ? Math.max(retryAfterSeconds * 1000, 0)
                   : null;
+                const failureStatus = res.response.status;
+                const failureLabel =
+                  codexFailoverDecision.reason === "rate_limit"
+                    ? "429 rate limit"
+                    : `${failureStatus} Codex overload`;
 
                 log?.warn?.(
                   "CODEX_FAILOVER",
-                  `429 on connection ${String(failedConnectionId).slice(0, 8)} (attempt ${attempts + 1}/${maxAttempts}), rotating account`
+                  `${failureLabel} on connection ${String(failedConnectionId).slice(0, 8)} (attempt ${attempts + 1}/${maxAttempts}), rotating account`
                 );
 
-                // Mark only the current Codex model scope as rate-limited.
                 if (failedConnectionId) {
-                  await markCodexScopeRateLimited({
-                    failedConnectionId: String(failedConnectionId),
-                    model: modelToCall || model || requestedModel || null,
-                    rateLimitedUntil: new Date(Date.now() + (retryAfterMs || 60_000)).toISOString(),
-                    credentials,
-                  });
-                  // Fix B: also persist the cooldown to
-                  // `provider_connections.rate_limited_until`. Without this,
-                  // the Codex 429 cascade survives the current request (via
-                  // `markCodexScopeRateLimited`'s in-memory Map) but is lost
-                  // on process restart — the same exhausted Codex key is
-                  // re-picked on the very next request. Mirrors
-                  // `open-sse/executors/antigravity.ts:343`.
-                  // Best-effort: never crash the chat path on DB write failure.
-                  try {
-                    const { setConnectionRateLimitUntil } = await import("@/lib/db/providers");
-                    const untilMs = Date.now() + (retryAfterMs || 60_000);
-                    setConnectionRateLimitUntil(String(failedConnectionId), untilMs);
-                  } catch {
-                    // ignore — best effort
+                  if (codexFailoverDecision.persistCooldown) {
+                    await markCodexScopeRateLimited({
+                      failedConnectionId: String(failedConnectionId),
+                      model: modelToCall || model || requestedModel || null,
+                      rateLimitedUntil: new Date(
+                        Date.now() + (retryAfterMs || 60_000)
+                      ).toISOString(),
+                      credentials,
+                    });
+                    // Preserve the existing 429 connection cooldown across restarts.
+                    // Best-effort: never crash the chat path on DB write failure.
+                    try {
+                      const { setConnectionRateLimitUntil } = await import("@/lib/db/providers");
+                      const untilMs = Date.now() + (retryAfterMs || 60_000);
+                      setConnectionRateLimitUntil(String(failedConnectionId), untilMs);
+                    } catch {
+                      // ignore — best effort
+                    }
                   }
+                  // Both 429 and overload skip the failed account for the remaining
+                  // attempts of this request. Overload deliberately writes no shared
+                  // account/scope state because it is not evidence of an account fault.
                   if (!codexExcludedIds.includes(String(failedConnectionId))) {
                     codexExcludedIds.push(String(failedConnectionId));
                   }
                 }
 
-                // Clear session affinity so next request won't be pinned to the failing account
-                if (codexSessionAffinityKey) {
+                // 429 is account-specific, so future requests should not remain pinned.
+                // An overload is upstream-wide and must not alter future affinity.
+                if (codexFailoverDecision.persistCooldown && codexSessionAffinityKey) {
                   try {
                     deleteSessionAccountAffinity(codexSessionAffinityKey, "codex");
                   } catch {
@@ -2886,7 +2913,10 @@ export async function handleChatCore({
                 ).catch(() => null);
 
                 if (!nextCreds || nextCreds.allRateLimited) {
-                  log?.warn?.("CODEX_FAILOVER", "No more codex accounts available — returning 429");
+                  log?.warn?.(
+                    "CODEX_FAILOVER",
+                    `No more codex accounts available — returning ${failureStatus}`
+                  );
                   if (stream) {
                     releaseAccountSemaphore();
                     return {
@@ -2916,6 +2946,8 @@ export async function handleChatCore({
                     new_connection_id: newConnectionId,
                     attempt: attempts + 1,
                     retry_after_ms: retryAfterMs,
+                    failure_reason: codexFailoverDecision.reason,
+                    cooldown_persisted: codexFailoverDecision.persistCooldown,
                   },
                 });
 

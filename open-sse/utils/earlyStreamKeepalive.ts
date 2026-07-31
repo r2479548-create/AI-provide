@@ -27,7 +27,7 @@
  */
 
 const ENCODER = new TextEncoder();
-const KEEPALIVE_FRAME = ENCODER.encode(": omniroute-keepalive\n\n");
+export const KEEPALIVE_FRAME = ENCODER.encode(": omniroute-keepalive\n\n");
 // OpenAI-compatible keepalive: a syntactically valid empty streaming chunk.
 // Some OpenAI-compatible clients parse every non-empty SSE line as JSON and
 // reject legal SSE comments before their first provider chunk arrives.
@@ -43,60 +43,6 @@ export const OPENAI_STARTUP_FRAME = OPENAI_KEEPALIVE_FRAME;
 // token the comment frame lets the client abort and retry the stream. Anthropic's own
 // API emits `event: ping` for exactly this reason; the /v1/messages route mirrors it.
 export const ANTHROPIC_PING_FRAME = ENCODER.encode('event: ping\ndata: {"type":"ping"}\n\n');
-// Responses API keepalive: a self-contained, self-closed synthetic reasoning
-// item (added -> summary_part.added -> text.delta -> summary_part.done),
-// matching the abbreviated close pattern open-sse/utils/stream.ts's own
-// emitSyntheticResponsesReasoningSummary already uses for real mid-stream
-// reasoning. Closed within this one frame (not left dangling open) since the
-// real upstream response — once it arrives — starts its own independent
-// response.created lifecycle from scratch; this placeholder item never
-// carries a response_id and isn't meant to be continued.
-const RESPONSES_STARTUP_ITEM_ID = "rs_omniroute_keepalive";
-const STARTUP_THINKING_TEXT = "OmniRoute: got request, sending to provider";
-export const RESPONSES_STARTUP_THINKING_FRAME = ENCODER.encode(
-  [
-    {
-      event: "response.output_item.added",
-      data: {
-        type: "response.output_item.added",
-        output_index: 0,
-        item: { id: RESPONSES_STARTUP_ITEM_ID, type: "reasoning", summary: [] },
-      },
-    },
-    {
-      event: "response.reasoning_summary_part.added",
-      data: {
-        type: "response.reasoning_summary_part.added",
-        item_id: RESPONSES_STARTUP_ITEM_ID,
-        output_index: 0,
-        summary_index: 0,
-        part: { type: "summary_text", text: "" },
-      },
-    },
-    {
-      event: "response.reasoning_summary_text.delta",
-      data: {
-        type: "response.reasoning_summary_text.delta",
-        item_id: RESPONSES_STARTUP_ITEM_ID,
-        output_index: 0,
-        summary_index: 0,
-        delta: STARTUP_THINKING_TEXT,
-      },
-    },
-    {
-      event: "response.reasoning_summary_part.done",
-      data: {
-        type: "response.reasoning_summary_part.done",
-        item_id: RESPONSES_STARTUP_ITEM_ID,
-        output_index: 0,
-        summary_index: 0,
-        part: { type: "summary_text", text: STARTUP_THINKING_TEXT },
-      },
-    },
-  ]
-    .map((e) => `event: ${e.event}\ndata: ${JSON.stringify(e.data)}\n\n`)
-    .join("")
-);
 // Anthropic Messages API default — Anthropic's own spec really does use a named
 // `event: error` SSE frame, so this is correct there. It is WRONG for the OpenAI-
 // format routes below: Chat Completions and Responses streaming never use the SSE
@@ -177,8 +123,7 @@ export type EarlyStreamKeepaliveOptions = {
  * type-check. A string discriminant narrows both branches under the same settings.
  */
 type SettledHandler =
-  | { status: "fulfilled"; response: Response }
-  | { status: "rejected"; error: unknown };
+  { status: "fulfilled"; response: Response } | { status: "rejected"; error: unknown };
 
 export async function withEarlyStreamKeepalive(
   handlerPromise: Promise<Response>,

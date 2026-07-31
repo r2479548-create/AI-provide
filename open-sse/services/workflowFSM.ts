@@ -81,6 +81,13 @@ const MED_KEYWORDS = [
 ];
 
 export function classifyRisk(desc: string): RiskLevel {
+  // Live mode forces low risk for unattended/automated execution
+  if (
+    process.env.OMNIROUTE_WORKFLOW_LIVE_MODE === "true" ||
+    process.env.OMNIROUTE_WORKFLOW_LIVE_MODE === "1"
+  ) {
+    return "low";
+  }
   const l = desc.toLowerCase();
   if (HIGH_KEYWORDS.some((k) => l.includes(k))) return "high";
   if (MED_KEYWORDS.some((k) => l.includes(k))) return "medium";
@@ -201,8 +208,20 @@ const T: Transition[] = [
   },
   {
     from: "test",
+    to: "done",
+    condition: (c) =>
+      c.testsPass &&
+      (process.env.OMNIROUTE_WORKFLOW_LIVE_MODE === "true" ||
+        process.env.OMNIROUTE_WORKFLOW_LIVE_MODE === "1"),
+    description: "Live Mode: Tests pass -> Done",
+  },
+  {
+    from: "test",
     to: "output_review",
-    condition: (c) => c.testsPass,
+    condition: (c) =>
+      c.testsPass &&
+      process.env.OMNIROUTE_WORKFLOW_LIVE_MODE !== "true" &&
+      process.env.OMNIROUTE_WORKFLOW_LIVE_MODE !== "1",
     description: "Tests pass -> output review",
   },
   {
